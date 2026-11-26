@@ -195,3 +195,14 @@ Inspection method: read-only ZIP metadata and bounded text-file reads. No projec
 - `source-map-js`: high — source-map-js allows event-loop denial of service through indexed source-map section offsets
 - `tar`: critical — node-tar Vulnerable to Arbitrary File Creation/Overwrite via Hardlink Path Traversal, node-tar is Vulnerable to Arbitrary File Overwrite and Symlink Poisoning via Insufficient Path Sanitization, Arbitrary File Read/Write via Hardlink Target Escape Through Symlink Chain in node-tar Extraction
 
+### Production dependencies only
+
+- npm exit code: 1
+- Vulnerabilities: {"critical": 2, "high": 1, "info": 0, "low": 0, "moderate": 3, "total": 6}
+- `@grpc/grpc-js`: high — @grpc/grpc-js: A malformed request can cause a server crash, @grpc/grpc-js: An incoming malformed compressed message can cause a client or server crash, @grpc/grpc-js: In certain configurations, getAuthContext can return unauthorized certificates as though they were authorized
+- `@protobufjs/utf8`: moderate — protobufjs has overlong UTF-8 decoding
+- `colord`: moderate — Colord: Slow rejection of oversized malformed color strings
+- `fflate`: moderate — fflate unzipSync can enter an infinite loop when parsing malformed ZIP64 archives, fflate unzipSync can enter an infinite loop when parsing malformed ZIP64 archives
+- `protobufjs`: critical — protobuf.js: Code injection through bytes field defaults in generated toObject code, protobuf.js: Denial of service from crafted field names in generated code, protobuf.js: Prototype injection in generated message constructors
+- `websocket-driver`: critical — websocket-driver: Resource limit bypass via message compression, websocket-driver: Message corruption via abuse of protocol length headers
+
