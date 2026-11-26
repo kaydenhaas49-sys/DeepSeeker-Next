@@ -1,0 +1,225 @@
+name: Skull Hotel archive audit
+
+on:
+  push:
+    paths:
+      - ".github/workflows/skullhotel-audit.yml"
+      - "incoming/skullhotel-source.zip"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository and fetch LFS archive
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Inspect archive without executing its contents
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import collections, json, os, re, stat, subprocess, tempfile, zipfile
+          from pathlib import PurePosixPath
+          from pathlib import Path
+
+          archive = Path("incoming/skullhotel-source.zip")
+          if not archive.is_file():
+              raise SystemExit("LFS archive is missing; checkout did not materialize it.")
+          report = ["# Skull Hotel source archive audit", "",
+                    "Inspection method: read-only ZIP metadata and bounded text-file reads. No project scripts, installers, or binaries were executed.", ""]
+          report += [f"- Archive bytes: {archive.stat().st_size:,}",
+                     f"- SHA-256 is recorded by Git LFS (see repository pointer); this report does not copy secret values.", ""]
+
+          with zipfile.ZipFile(archive) as z:
+              infos = z.infolist()
+              files = [i for i in infos if not i.is_dir()]
+              bad_paths, symlinks, encrypted, duplicates, suspicious_ratios = [], [], [], [], []
+              seen = set()
+              for i in files:
+                  p = PurePosixPath(i.filename)
+                  if p.is_absolute() or ".." in p.parts or "\\\\" in i.filename:
+                      bad_paths.append(i.filename)
+                  if i.external_attr >> 16 & 0o170000 == stat.S_IFLNK:
+                      symlinks.append(i.filename)
+                  if i.flag_bits & 1:
+                      encrypted.append(i.filename)
+                  if i.filename in seen:
+                      duplicates.append(i.filename)
+                  seen.add(i.filename)
+                  if i.file_size > 0 and (i.compress_size == 0 or i.file_size / max(i.compress_size, 1) > 200):
+                      suspicious_ratios.append((i.filename, i.file_size, i.compress_size))
+              total = sum(i.file_size for i in files)
+              exts = collections.Counter((PurePosixPath(i.filename).suffix.lower() or "[no extension]") for i in files)
+              report += ["## Archive structure",
+                         f"- Entries: {len(infos):,} ({len(files):,} files)",
+                         f"- Declared expanded size: {total:,} bytes",
+                         f"- Unsafe paths: {len(bad_paths)}",
+                         f"- Symlinks: {len(symlinks)}",
+                         f"- Encrypted entries: {len(encrypted)}",
+                         f"- Duplicate paths: {len(duplicates)}",
+                         f"- Compression ratios above 200:1: {len(suspicious_ratios)}", ""]
+              for title, items in [("Unsafe paths", bad_paths), ("Symlinks", symlinks),
+                                   ("Encrypted entries", encrypted), ("Duplicate paths", duplicates)]:
+                  if items:
+                      report += [f"### {title}"] + [f"- `{x}`" for x in items[:30]] + [""]
+              if suspicious_ratios:
+                  report += ["### High compression ratios"]
+                  report += [f"- `{n}`: {s:,} bytes from {c:,} bytes" for n,s,c in suspicious_ratios[:30]]
+                  report.append("")
+
+              report += ["## File types", "", "| Extension | Count |", "|---|---:|"]
+              report += [f"| {k} | {v} |" for k,v in exts.most_common(30)]
+              report += ["", "## Largest files", "", "| Path | Expanded bytes |", "|---|---:|"]
+              report += [f"| `{i.filename}` | {i.file_size:,} |" for i in sorted(files, key=lambda x:x.file_size, reverse=True)[:30]]
+              report.append("")
+
+              # Read only small text files likely to contain manifests/config/license metadata.
+              candidates = [i for i in files if i.file_size <= 2_000_000 and
+                            (PurePosixPath(i.filename).name.lower() in
+                             {"package.json","package-lock.json","readme.md","license","license.md","notice","credits.md","attributions.md",".env",".env.example","firebase.json","firestore.rules"}
+                             or PurePosixPath(i.filename).suffix.lower() in {".md",".txt",".yml",".yaml",".json"})]
+              contents = {}
+              for i in candidates:
+                  try:
+                      raw = z.read(i)
+                      if b"\x00" not in raw[:4096]:
+                          contents[i.filename] = raw.decode("utf-8", "replace")
+                  except Exception:
+                      pass
+
+              manifests = [(n,t) for n,t in contents.items() if PurePosixPath(n).name == "package.json"]
+              report += ["## Package manifests"]
+              if not manifests:
+                  report.append("- No package.json was found.")
+              for name, text in manifests[:10]:
+                  try:
+                      pkg = json.loads(text)
+                  except Exception:
+                      report += [f"- `{name}`: invalid JSON"]
+                      continue
+                  deps = pkg.get("dependencies") or {}
+                  dev = pkg.get("devDependencies") or {}
+                  report += [f"### `{name}`",
+                             f"- Package: {pkg.get('name','(unnamed)')} {pkg.get('version','')}",
+                             f"- Declared license: {pkg.get('license','not declared')}",
+                             f"- Runtime dependencies: {len(deps)}",
+                             f"- Development dependencies: {len(dev)}",
+                             f"- Scripts (not executed): {', '.join(sorted((pkg.get('scripts') or {}).keys())) or 'none'}"]
+                  if deps:
+                      report += ["", "**Runtime dependencies**", ""] + [f"- `{k}`: `{v}`" for k,v in sorted(deps.items())]
+                  if dev:
+                      report += ["", "**Development dependencies**", ""] + [f"- `{k}`: `{v}`" for k,v in sorted(dev.items())]
+                  report.append("")
+
+              locks = [(n,t) for n,t in contents.items() if PurePosixPath(n).name == "package-lock.json"]
+              report += ["## Lockfile", ""]
+              if locks:
+                  try:
+                      lock = json.loads(locks[0][1])
+                      report += [f"- `{locks[0][0]}`: lockfileVersion {lock.get('lockfileVersion','unknown')}",
+                                 f"- Package records: {len(lock.get('packages') or {}):,}"]
+                  except Exception:
+                      report.append("- package-lock.json exists but could not be parsed.")
+              else:
+                  report.append("- No package-lock.json found.")
+              report.append("")
+
+              license_files = [(n,t) for n,t in contents.items()
+                               if any(x in PurePosixPath(n).name.lower() for x in ("license","licence","notice","copying","credits","attribution"))]
+              report += ["## License and attribution files", ""]
+              if license_files:
+                  for n,t in license_files[:30]:
+                      report.append(f"- `{n}` ({len(t)} characters)")
+              else:
+                  report.append("- No license/notice/credits files found in the bounded text-file scan.")
+              report.append("")
+
+              readmes = [(n,t) for n,t in contents.items() if PurePosixPath(n).name.lower() == "readme.md"]
+              if readmes:
+                  report += ["## README asset and attribution references", ""]
+                  lines = readmes[0][1].splitlines()
+                  matches = [(idx+1,line.strip()) for idx,line in enumerate(lines)
+                             if re.search(r"asset|mixamo|blenderkit|audiojungle|ambientcg|license|attribution|credit", line, re.I)]
+                  report += [f"- Line {idx}: {line[:300]}" for idx,line in matches[:50]] or ["- No relevant reference lines found."]
+                  report.append("")
+
+              # Report only finding categories and file names; never print matched values.
+              patterns = [
+                  ("Private-key header", re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----")),
+                  ("AWS access-key ID", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+                  ("GitHub access token", re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b")),
+                  ("Google/Firebase API key", re.compile(r"\bAIza[0-9A-Za-z_-]{30,}\b")),
+                  ("Slack token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b")),
+                  ("OpenAI-style secret key", re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")),
+              ]
+              findings = []
+              for name, text in contents.items():
+                  for label, pattern in patterns:
+                      count = len(pattern.findall(text))
+                      if count:
+                          findings.append((name, label, count))
+              env_files = [i.filename for i in files if PurePosixPath(i.filename).name.lower().startswith(".env")]
+              report += ["## Configuration and secret-pattern screening", ""]
+              report += [f"- Environment-file paths: {', '.join('`'+x+'`' for x in env_files[:40]) or 'none'}"]
+              if findings:
+                  report.append("- Potential matches found (values intentionally redacted):")
+                  report += [f"  - `{n}`: {label} ({count} match(es))" for n,label,count in findings]
+              else:
+                  report.append("- No matches for the limited high-signal patterns in bounded text files.")
+              report += ["- This is a heuristic screen, not a guarantee that the archive contains no secrets.", ""]
+
+              report += ["## Safety checks", "",
+                         f"- Unsafe ZIP paths: {'FAIL' if bad_paths else 'none found'}",
+                         f"- Symlink entries: {'present; review before extraction' if symlinks else 'none found'}",
+                         f"- Encrypted entries: {'present; contents not inspectable' if encrypted else 'none found'}",
+                         f"- Extreme compression ratios: {'present; review before extraction' if suspicious_ratios else 'none found'}",
+                         "- No archive code or install scripts were run.", ""]
+
+          # Run a registry advisory check against the lockfile only (no install and no lifecycle scripts).
+          lock_candidates = [n for n in contents if PurePosixPath(n).name == "package-lock.json"]
+          if lock_candidates and "package.json" in contents:
+              try:
+                  with tempfile.TemporaryDirectory() as td:
+                      Path(td, "package.json").write_text(contents["package.json"])
+                      Path(td, "package-lock.json").write_text(contents[lock_candidates[0]])
+                      p = subprocess.run(["npm", "audit", "--package-lock-only", "--json"],
+                                         cwd=td, capture_output=True, text=True, timeout=90)
+                      data = json.loads(p.stdout or "{}")
+                      meta = data.get("metadata", {}).get("vulnerabilities", {})
+                      report += ["## npm advisory check (lockfile only)", "",
+                                 f"- npm exit code: {p.returncode}",
+                                 f"- Vulnerabilities: {json.dumps(meta, sort_keys=True) if meta else 'no vulnerability summary returned'}"]
+                      advisories = data.get("vulnerabilities") or {}
+                      for name, v in list(advisories.items())[:40]:
+                          via = v.get("via") or []
+                          titles = [x.get("title","") if isinstance(x,dict) else str(x) for x in via]
+                          report.append(f"- `{name}`: {v.get('severity','unknown')} — {', '.join(titles[:3])}")
+                      if not advisories and p.stderr:
+                          report.append(f"- npm stderr (truncated): {p.stderr[:1000].replace(chr(10),' ')}")
+                      report.append("")
+              except Exception as e:
+                  report += ["## npm advisory check (lockfile only)", "", f"- Could not complete: {type(e).__name__}: {e}", ""]
+
+          Path("audits").mkdir(exist_ok=True)
+          out = Path("audits/SKULLHOTEL_ARCHIVE_AUDIT.md")
+          out.write_text("\n".join(report) + "\n", encoding="utf-8")
+          print("\n".join(report[:100]))
+          PY
+
+      - name: Publish audit report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add audits/SKULLHOTEL_ARCHIVE_AUDIT.md
+          if git diff --cached --quiet; then
+            echo "Audit report is unchanged."
+          else
+            git commit -m "Add read-only Skull Hotel archive audit"
+            git push
+          fi
