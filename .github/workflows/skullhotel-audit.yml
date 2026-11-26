@@ -83,7 +83,7 @@ jobs:
               candidates = [i for i in files if i.file_size <= 2_000_000 and
                             (PurePosixPath(i.filename).name.lower() in
                              {"package.json","package-lock.json","readme.md","license","license.md","notice","credits.md","attributions.md",".env",".env.example","firebase.json","firestore.rules"}
-                             or PurePosixPath(i.filename).suffix.lower() in {".md",".txt",".yml",".yaml",".json"})]
+                             or PurePosixPath(i.filename).name.lower().startswith(".env") or PurePosixPath(i.filename).suffix.lower() in {".md",".txt",".yml",".yaml",".json",".js",".jsx",".ts",".tsx",".html"})]
               contents = {}
               for i in candidates:
                   try:
@@ -182,12 +182,16 @@ jobs:
                          "- No archive code or install scripts were run.", ""]
 
           # Run a registry advisory check against the lockfile only (no install and no lifecycle scripts).
+          manifest_candidates = [(n,t) for n,t in contents.items() if PurePosixPath(n).name == "package.json"]
           lock_candidates = [n for n in contents if PurePosixPath(n).name == "package-lock.json"]
-          if lock_candidates and "package.json" in contents:
+          if lock_candidates and manifest_candidates:
               try:
+                  manifest_path, manifest_text = manifest_candidates[0]
+                  manifest_parent = PurePosixPath(manifest_path).parent
+                  matching_lock = next((n for n in lock_candidates if PurePosixPath(n).parent == manifest_parent), lock_candidates[0])
                   with tempfile.TemporaryDirectory() as td:
-                      Path(td, "package.json").write_text(contents["package.json"])
-                      Path(td, "package-lock.json").write_text(contents[lock_candidates[0]])
+                      Path(td, "package.json").write_text(manifest_text)
+                      Path(td, "package-lock.json").write_text(contents[matching_lock])
                       p = subprocess.run(["npm", "audit", "--package-lock-only", "--json"],
                                          cwd=td, capture_output=True, text=True, timeout=90)
                       data = json.loads(p.stdout or "{}")
