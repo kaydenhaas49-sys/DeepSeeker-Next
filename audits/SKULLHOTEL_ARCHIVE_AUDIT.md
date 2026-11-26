@@ -150,3 +150,48 @@ Inspection method: read-only ZIP metadata and bounded text-file reads. No projec
 - Extreme compression ratios: none found
 - No archive code or install scripts were run.
 
+## npm advisory check (lockfile only)
+
+- npm exit code: 1
+- Vulnerabilities: {"critical": 3, "high": 33, "info": 0, "low": 2, "moderate": 6, "total": 44}
+- `@babel/core`: low — @babel/core: Arbitrary File Read via sourceMappingURL Comment
+- `@electron/node-gyp`: high — make-fetch-happen, tar
+- `@electron/rebuild`: high — @electron/node-gyp, tar
+- `@grpc/grpc-js`: high — @grpc/grpc-js: A malformed request can cause a server crash, @grpc/grpc-js: An incoming malformed compressed message can cause a client or server crash, @grpc/grpc-js: In certain configurations, getAuthContext can return unauthorized certificates as though they were authorized
+- `@humanfs/node`: moderate — humanfs: Recursive copy follows symlinked files and copies data from outside the source tree
+- `@isaacs/brace-expansion`: high — @isaacs/brace-expansion has Uncontrolled Resource Consumption
+- `@protobufjs/utf8`: moderate — protobufjs has overlong UTF-8 decoding
+- `@tootallnate/once`: low — @tootallnate/once vulnerable to Incorrect Control Flow Scoping
+- `@xmldom/xmldom`: high — xmldom: XML injection via unsafe CDATA serialization allows attacker-controlled markup insertion, xmldom: Uncontrolled recursion in XML serialization leads to DoS, xmldom has XML injection through unvalidated DocumentType serialization
+- `ajv`: moderate — ajv has ReDoS when using `$data` option
+- `app-builder-lib`: high — @electron/rebuild, electron-updater: Uncontrolled search path elements within `AppImage` built by `app-builder-lib`, builder-util
+- `baseline-browser-mapping`: moderate — baseline-browser-mapping process termination on invalid input causes denial of service
+- `brace-expansion`: high — brace-expansion: Zero-step sequence causes process hang and memory exhaustion, brace-expansion: Zero-step sequence causes process hang and memory exhaustion, brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups
+- `browserslist`: high — Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM, Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats)
+- `builder-util`: high — builder-util-runtime
+- `builder-util-runtime`: high — electron-updater: Cross-origin redirect leaks `PRIVATE-TOKEN` and mixed-case `Authorization` credentials in `builder-util-runtime`
+- `cacache`: high — tar
+- `colord`: moderate — Colord: Slow rejection of oversized malformed color strings
+- `dmg-builder`: high — app-builder-lib, builder-util, builder-util-runtime
+- `electron`: high — Electron: AppleScript injection in app.moveToApplicationsFolder on macOS, Electron: Service worker can spoof executeJavaScript IPC replies, Electron: Incorrect origin passed to permission request handler for iframe requests
+- `electron-builder`: high — app-builder-lib, builder-util, builder-util-runtime
+- `electron-builder-squirrel-windows`: high — app-builder-lib, builder-util
+- `electron-publish`: high — builder-util, builder-util-runtime
+- `extract-zip`: high — extract-zip unvalidated symlink path traversal, extract-zip allows arbitrary file writes through symlink archive entries
+- `fflate`: moderate — fflate unzipSync can enter an infinite loop when parsing malformed ZIP64 archives, fflate unzipSync can enter an infinite loop when parsing malformed ZIP64 archives
+- `flatted`: high — flatted vulnerable to unbounded recursion DoS in parse() revive phase, Prototype Pollution via parse() in NodeJS flatted
+- `form-data`: high — form-data: CRLF injection in form-data via unescaped multipart field names and filenames
+- `glob`: high — glob CLI: Command injection via -c/--cmd executes matches with shell:true, Glob: AbortSignal cancellation bypass allows post-timeout filesystem traversal
+- `ip-address`: high — ip-address has XSS in Address6 HTML-emitting methods, ip-address: Address4 decodes leading-zero octets as decimal while resolvers decode them as octal, allowing SSRF and trust-boundary bypass, ip-address: Address6.isLinkLocal() recognizes fe80::/64 rather than fe80::/10, allowing SSRF and trust-boundary bypass to on-link hosts
+- `js-yaml`: high — js-yaml has prototype pollution in merge (<<), JS-YAML: Quadratic-complexity DoS in merge key handling via repeated aliases, js-yaml: YAML merge-key chains can force quadratic CPU consumption
+- `lodash`: high — lodash vulnerable to Code Injection via `_.template` imports key names, Lodash has Prototype Pollution Vulnerability in `_.unset`, `_.omit`, and `_.pullAt` functions
+- `make-fetch-happen`: high — cacache
+- `minimatch`: high — minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern, minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern, minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern
+- `nanoid`: high — nanoid: non-secure generators can loop indefinitely with negative size, nanoid: custom generators can loop indefinitely when size is zero, nanoid: Integer Overflow or Wraparound
+- `picomatch`: high — Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching, Picomatch has a ReDoS vulnerability via extglob quantifiers
+- `postcss`: high — PostCSS has XSS via Unescaped </style> in its CSS Stringify Output, PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments, PostCSS: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset
+- `protobufjs`: critical — protobuf.js: Code injection through bytes field defaults in generated toObject code, protobuf.js: Denial of service from crafted field names in generated code, protobuf.js: Prototype injection in generated message constructors
+- `rollup`: high — Rollup 4 has Arbitrary File Write via Path Traversal
+- `source-map-js`: high — source-map-js allows event-loop denial of service through indexed source-map section offsets
+- `tar`: critical — node-tar Vulnerable to Arbitrary File Creation/Overwrite via Hardlink Path Traversal, node-tar is Vulnerable to Arbitrary File Overwrite and Symlink Poisoning via Insufficient Path Sanitization, Arbitrary File Read/Write via Hardlink Target Escape Through Symlink Chain in node-tar Extraction
+
