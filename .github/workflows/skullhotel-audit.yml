@@ -207,6 +207,22 @@ jobs:
                       if not advisories and p.stderr:
                           report.append(f"- npm stderr (truncated): {p.stderr[:1000].replace(chr(10),' ')}")
                       report.append("")
+
+                      prod = subprocess.run(["npm", "audit", "--package-lock-only", "--omit=dev", "--json"],
+                                            cwd=td, capture_output=True, text=True, timeout=90)
+                      prod_data = json.loads(prod.stdout or "{}")
+                      prod_meta = prod_data.get("metadata", {}).get("vulnerabilities", {})
+                      prod_advisories = prod_data.get("vulnerabilities") or {}
+                      report += ["### Production dependencies only", "",
+                                 f"- npm exit code: {prod.returncode}",
+                                 f"- Vulnerabilities: {json.dumps(prod_meta, sort_keys=True) if prod_meta else 'no vulnerability summary returned'}"]
+                      for name, v in list(prod_advisories.items())[:40]:
+                          via = v.get("via") or []
+                          titles = [x.get("title","") if isinstance(x,dict) else str(x) for x in via]
+                          report.append(f"- `{name}`: {v.get('severity','unknown')} — {', '.join(titles[:3])}")
+                      if not prod_advisories and prod.stderr:
+                          report.append(f"- npm stderr (truncated): {prod.stderr[:1000].replace(chr(10),' ')}")
+                      report.append("")
               except Exception as e:
                   report += ["## npm advisory check (lockfile only)", "", f"- Could not complete: {type(e).__name__}: {e}", ""]
 
